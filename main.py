@@ -11,6 +11,16 @@ OUTPUT_FILE = "live.m3u"
 CHECK_TIMEOUT = 3.0      # 单个源测速超时（秒）
 MAX_CONCURRENCY = 50     # 并发测速数
 
+# 地域限制 / 失效 playlist 的特征词
+BLOCKED_KEYWORDS = [
+    "not available in your area",
+    "not available in your region",
+    "geo-block",
+    "geoblocked",
+    "access denied",
+    "forbidden",
+]
+
 
 async def fetch_text(session, url, timeout=15):
     try:
@@ -42,15 +52,41 @@ def parse_m3u(text):
     return channels
 
 
+def _looks_like_valid_m3u8(text):
+    """检查 m3u8 文本是否真包含可播分片（过滤地域限制/报错页面）"""
+    if "#EXTM3U" not in text:
+        return False
+    lower = text.lower()
+    for kw in BLOCKED_KEYWORDS:
+        if kw in lower:
+            return False
+    # 至少有一行像分片地址（非 # 开头的非空行）
+    for line in text.splitlines():
+        s = line.strip()
+        if s and not s.startswith("#"):
+            return True
+    return False
+
+
 async def test_stream(session, url):
-    """浅层保活检查：能建连并读到数据即算存活"""
+    """保活检查：m3u8 源验证 playlist 真有分片；其他源浅层检查"""
     try:
         start = time.time()
         async with session.get(url, timeout=CHECK_TIMEOUT) as resp:
-            if resp.status == 200:
-                chunk = await resp.content.read(1024)
-                if chunk:
-                    return True, time.time() - start
+            if resp.status != 200:
+                return False, 0
+            chunk = await resp.content.read(8192)
+            if not chunk:
+                return False, 0
+            # m3u8 源做深层验证
+            if url.lower().split("?")[0].endswith(".m3u8"):
+                try:
+                    text = chunk.decode("utf-8", errors="ignore")
+                except Exception:
+                    return False, 0
+                if not _looks_like_valid_m3u8(text):
+                    return False, 0
+            return True, time.time() - start
     except Exception:
         pass
     return False, 0
