@@ -5,6 +5,9 @@ import aiohttp
 # 优质公开源聚合地址（可继续添加）
 SOURCE_URLS = [
     "https://iptv-org.github.io/iptv/countries/cn.m3u",
+    "https://iptv-org.github.io/iptv/countries/hk.m3u",
+    "https://iptv-org.github.io/iptv/countries/tw.m3u",
+    "https://live.zbds.top/tv/iptv4.m3u",
 ]
 
 OUTPUT_FILE = "live.m3u"
